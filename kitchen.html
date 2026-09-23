@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>จอครัว Realtime</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen p-6 font-sans">
+  <div class="max-w-6xl mx-auto space-y-6">
+    <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+      <h1 class="text-2xl font-bold flex items-center gap-2">👨‍🍳 Kitchen Display (Realtime)</h1>
+      <span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/30">
+        ● Realtime Active
+      </span>
+    </div>
+
+    <div id="orders-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://cqxrnttoppnoklijrjel.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_A-vcJG5WKS31CB5zk9Q_2Q_vGd_pTjT';
+
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function loadOrders() {
+      const { data } = await supabaseClient
+        .from('orders')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true });
+      
+      renderOrders(data || []);
+    }
+
+    function renderOrders(orders) {
+      const container = document.getElementById('orders-grid');
+      container.innerHTML = '';
+
+      if (orders.length === 0) {
+        container.innerHTML = `<div class="col-span-3 text-center text-slate-500 py-12">ยังไม่มีออเดอร์ใหม่เข้ามา</div>`;
+        return;
+      }
+
+      orders.forEach(order => {
+        let itemsHtml = '';
+        order.items.forEach(i => {
+          itemsHtml += `<li class="flex justify-between text-sm py-1.5 border-b border-slate-700/50">
+            <span>${i.name}</span>
+            <span class="font-bold text-yellow-400">x${i.quantity}</span>
+          </li>`;
+        });
+
+        const card = document.createElement('div');
+        card.className = 'bg-slate-800 p-4 rounded-2xl border border-slate-700 space-y-3 shadow-lg';
+        card.innerHTML = `
+          <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+            <span class="text-lg font-bold text-red-400">โต๊ะ ${order.table_number}</span>
+            <span class="text-xs text-slate-400">${new Date(order.created_at).toLocaleTimeString('th-TH')}</span>
+          </div>
+          <ul class="space-y-1">${itemsHtml}</ul>
+          <button onclick="finishOrder(${order.id})" class="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-sm transition">
+            เสิร์ฟแล้ว
+          </button>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    async function finishOrder(orderId) {
+      await supabaseClient.from('orders').update({ status: 'served' }).eq('id', orderId);
+      loadOrders();
+    }
+
+    // ฟังการแจ้งเตือน Realtime จาก Supabase
+    supabaseClient
+      .channel('public:orders')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, payload => {
+        loadOrders();
+      })
+      .subscribe();
+
+    loadOrders();
+  </script>
+</body>
+</html>

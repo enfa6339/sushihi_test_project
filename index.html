@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ร้านซูชิ - จัดการโต๊ะอาหาร</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen p-6 font-sans">
+  <div class="max-w-xl mx-auto bg-white p-6 rounded-2xl shadow-sm border space-y-6">
+    <h1 class="text-2xl font-bold text-center text-slate-800">🍣 เลือกโต๊ะ & สร้าง QR Code สั่งอาหาร</h1>
+    
+    <div>
+      <label class="block text-sm font-medium text-slate-700 mb-2">1. เลือกหมายเลขโต๊ะ</label>
+      <div id="table-list" class="grid grid-cols-3 gap-3"></div>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-slate-700 mb-1">2. จำนวนลูกค้า (คน)</label>
+      <input type="number" id="guest-count" value="2" min="1" class="w-full p-2.5 border rounded-xl" />
+    </div>
+
+    <button onclick="generateQR()" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl shadow-md transition">
+      สร้าง QR Code
+    </button>
+
+    <div id="qr-container" class="hidden text-center space-y-3 pt-4 border-t">
+      <div id="qrcode" class="flex justify-center"></div>
+      <p id="qr-link-text" class="text-sm font-bold text-slate-800"></p>
+      <a id="open-link" href="#" target="_blank" class="inline-block text-xs text-red-500 underline">ทดลองเปิดหน้าสั่งอาหาร (Customer)</a>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://cqxrnttoppnoklijrjel.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_A-vcJG5WKS31CB5zk9Q_2Q_vGd_pTjT';
+
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    let selectedTable = null;
+
+    async function loadTables() {
+      const { data } = await supabaseClient.from('tables').select('*').order('table_number');
+      const container = document.getElementById('table-list');
+      container.innerHTML = '';
+      (data || []).forEach(t => {
+        const btn = document.createElement('button');
+        btn.className = `p-3 border rounded-xl font-bold text-center table-btn transition hover:border-red-300`;
+        btn.innerText = `โต๊ะ ${t.table_number}`;
+        btn.onclick = () => {
+          document.querySelectorAll('.table-btn').forEach(b => b.classList.remove('border-red-500', 'bg-red-50', 'text-red-600'));
+          btn.classList.add('border-red-500', 'bg-red-50', 'text-red-600');
+          selectedTable = t.table_number;
+        };
+        container.appendChild(btn);
+      });
+    }
+
+    function generateQR() {
+      if (!selectedTable) return alert('กรุณาเลือกโต๊ะก่อนครับ');
+      const guests = document.getElementById('guest-count').value;
+      const currentOrigin = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
+      const customerUrl = `${currentOrigin}/customer.html?table=${selectedTable}&guests=${guests}`;
+
+      document.getElementById('qrcode').innerHTML = '';
+      new QRCode(document.getElementById('qrcode'), { text: customerUrl, width: 180, height: 180 });
+      document.getElementById('qr-link-text').innerText = `โต๊ะที่ ${selectedTable} (${guests} ท่าน)`;
+      document.getElementById('open-link').href = customerUrl;
+      document.getElementById('qr-container').classList.remove('hidden');
+    }
+
+    loadTables();
+  </script>
+</body>
+</html>

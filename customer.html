@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สั่งอาหารซูชิ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 pb-28 font-sans">
+  <div class="max-w-md mx-auto space-y-4">
+    <div class="bg-red-500 text-white p-4 rounded-2xl shadow-md">
+      <h1 class="text-xl font-bold">🍣 เมนูซูชิออนไลน์</h1>
+      <p id="table-info" class="text-sm opacity-90">กำลังโหลด...</p>
+    </div>
+
+    <div id="menu-list" class="space-y-3"></div>
+  </div>
+
+  <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-4 shadow-lg">
+    <div class="max-w-md mx-auto flex items-center justify-between">
+      <div>
+        <p class="text-xs text-slate-500">ราคารวม</p>
+        <p id="total-price" class="text-lg font-bold text-red-600">฿0.00</p>
+      </div>
+      <button onclick="submitOrder()" class="bg-red-500 hover:bg-red-600 text-white font-bold px-6 py-3 rounded-xl shadow-md">
+        ส่งออเดอร์
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://cqxrnttoppnoklijrjel.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_A-vcJG5WKS31CB5zk9Q_2Q_vGd_pTjT';
+    
+    // 🤖 Telegram Key ของคุณ
+    const TELEGRAM_BOT_TOKEN = '8847189591:AAHqSGVb5bMm8E8is4RGzutFgqLQ1X-j0mA';
+    const TELEGRAM_CHAT_ID = '8486996324';
+
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const tableNumber = parseInt(urlParams.get('table')) || 1;
+    const guestCount = parseInt(urlParams.get('guests')) || 1;
+
+    document.getElementById('table-info').innerText = `โต๊ะที่: ${tableNumber} | ลูกค้า: ${guestCount} ท่าน`;
+
+    let cart = {}; 
+
+    async function loadMenu() {
+      const { data } = await supabaseClient.from('menu_items').select('*').eq('is_available', true);
+      const container = document.getElementById('menu-list');
+      container.innerHTML = '';
+
+      (data || []).forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'bg-white p-3 rounded-2xl border flex items-center gap-3 shadow-sm';
+        div.innerHTML = `
+          <img src="${item.image_url}" class="w-16 h-16 object-cover rounded-xl" />
+          <div class="flex-1">
+            <h3 class="font-bold text-slate-800 text-sm">${item.name}</h3>
+            <p class="text-xs text-slate-500">฿${item.price}</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="updateCart(${item.id}, '${item.name}', ${item.price}, -1)" class="w-8 h-8 bg-slate-100 rounded-full font-bold text-slate-600">-</button>
+            <span id="qty-${item.id}" class="text-sm font-bold w-4 text-center">0</span>
+            <button onclick="updateCart(${item.id}, '${item.name}', ${item.price}, 1)" class="w-8 h-8 bg-red-500 text-white rounded-full font-bold">+</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function updateCart(id, name, price, change) {
+      if (!cart[id]) cart[id] = { name, price, quantity: 0 };
+      cart[id].quantity += change;
+      if (cart[id].quantity <= 0) delete cart[id];
+
+      document.getElementById(`qty-${id}`).innerText = cart[id] ? cart[id].quantity : 0;
+      calculateTotal();
+    }
+
+    function calculateTotal() {
+      const total = Object.values(cart).reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      document.getElementById('total-price').innerText = `฿${total.toFixed(2)}`;
+      return total;
+    }
+
+    async function submitOrder() {
+      const itemsArray = Object.values(cart);
+      if (itemsArray.length === 0) return alert('กรุณาเลือกอย่างน้อย 1 เมนูครับ');
+      const totalPrice = calculateTotal();
+
+      // 1. บันทึกลง Supabase
+      const { error } = await supabaseClient.from('orders').insert([
+        { table_number: tableNumber, guest_count: guestCount, items: itemsArray, total_price: totalPrice }
+      ]);
+
+      if (error) return alert('เกิดข้อผิดพลาดในการส่งออเดอร์');
+
+      // 2. ส่งข้อความเข้า Telegram
+      let msg = `🍣 **มีออเดอร์ใหม่เข้า! [SUSHI HI]**\n📌 **โต๊ะที่:** ${tableNumber} (${guestCount} ท่าน)\n-------------------\n`;
+      itemsArray.forEach(i => msg += `• ${i.name} x ${i.quantity}\n`);
+      msg += `-------------------\n💰 **ราคารวม:** ฿${totalPrice}`;
+
+      fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: msg, parse_mode: 'Markdown' })
+      });
+
+      alert('ส่งออเดอร์เรียบร้อยแล้วครับ!');
+      location.reload();
+    }
+
+    loadMenu();
+  </script>
+</body>
+</html>
